@@ -301,7 +301,7 @@ strip_vlan(priv_p priv, item_p item, uint16_t *etype, uint16_t *vid)
 		NG_FREE_ITEM(item);
 		return (EINVAL);
 	}
- 
+
 	m = m_pullup(m, ETHER_HDR_LEN);
 	if (m == NULL) {
 		_NGI_M(item) = NULL;

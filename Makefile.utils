@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2025 David Marker <dave@freedave.net>
+# Copyright (c) 2026 David Marker <dave@freedave.net>
 #
 # SPDX-License-Identifier: BSD-2-Clause
 #

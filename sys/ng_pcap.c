@@ -416,7 +416,7 @@ ng_pcap_rcvmsg(node_p node, item_p item, hook_p lasthook)
 				error = EISCONN;
 				break;
 			}
-			
+
 			priv->cfg = *cfg;
 			break;
 		}

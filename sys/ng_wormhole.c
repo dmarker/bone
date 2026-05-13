@@ -497,7 +497,7 @@ ng_wormhole_disconnect(hook_p hook)
 			priv->eh = NULL; /* allow new connection */
 		else
 			ng_rmnode_self(NG_HOOK_NODE(hook));
-	}	
+	}
 
 	return (0);
 }

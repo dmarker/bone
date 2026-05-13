@@ -7,8 +7,6 @@
 #include <assert.h>
 #include <err.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
 
 #include "common.h"
@@ -42,7 +40,7 @@ ng_shutdown_node(ngctx ctrl, ng_ID_t nd)
 
 	assert(ctrl >= 0);
 	assert(nd > 0);
-	
+
 	snprintf(pth, NG_NODESIZ, IDFMT, nd);
 
 	rc = NgSendMsg(ctrl, pth, NGM_GENERIC_COOKIE, NGM_SHUTDOWN, NULL, 0);

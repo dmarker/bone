@@ -11,7 +11,7 @@ CompileFlags:
         - "-I."
 ---
 If:
-    PathMatch: "bin/.*/.*.c"
+    PathMatch: ["bin/.*/.*.c", "bin/.*/.*.h"]
 CompileFlags:
     Add:
         - "-I../../sys"
