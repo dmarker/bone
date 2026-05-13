@@ -6,6 +6,7 @@
 [20]: https://www.freshports.org/net/dhcpcd
 [21]: https://github.com/dmarker/bong-kmods
 [22]: https://github.com/dmarker/bong-utils
+[23]: https://www.freshports.org/net/kea
 [30]: https://bugs.freebsd.org/bugzilla/show_bug.cgi?id=286717
 
 [40]: https://man.freebsd.org/cgi/man.cgi?query=netgraph&sektion=4
@@ -22,6 +23,8 @@
 [62]: https://man.freebsd.org/cgi/man.cgi?query=sh&sektion=1
 [63]: https://man.freebsd.org/cgi/man.cgi?query=rc.conf&sektion=5
 [64]: https://man.freebsd.org/cgi/man.cgi?query=loader.conf&sektion=5
+[65]: https://man.freebsd.org/cgi/man.cgi?query=rtadvd&sektion=8
+[66]: https://man.freebsd.org/cgi/man.cgi?query=rtadvd.conf&sektion=5
 
 # bone
 The "[B]ag [O]f [N]etgraph [E]xtensions" is a set of evolving
@@ -164,3 +167,200 @@ any other way you prefer to configure your network (I like [net/dhcpcd][20]).
 
 That, surprisingly, is really all that is necessary to configure whatever you
 can dream up to put in an [ngctl(8)][48] command file.
+
+## Example setup for using wormholes with jails
+
+After installing both `bone-kmods` (or `bone-kmods@invariants`) and `bone-utils`
+here is some sample config ideas. You will have to change interface names and
+ULA addresses to meet your needs, these are the values I use.
+
+First go ahead and get netgraph loaded in [loader.conf(5)][64], edit your
+`/boot/loader.conf` and add:
+```
+netgraph_load="YES"
+ng_ether_load="YES"
+```
+
+If `ngctl ls` does not show your network interfaces you have to reboot. Sorry.
+
+Now you need `/usr/loca/etc/ng/ngctl.conf`. I'm assuming you want a private
+network for your jails as well as the ability to share your main NIC, which in
+this example is `re0`. So the bridge for your local area network will be `br0`
+and the private bridge for jails will be `br1` we will rename `re0` to `re0br0`:
+```
+# you get to have comments in this file
+# Start with bridges (crete br0 and br1):
+mkpeer .: bridge b link0
+name .:b br0
+msg br0: setpersistent
+disconnect .: b
+mkpeer .: bridge b link0
+name .:b br1
+msg br1: setpersistent
+disconnect .: b
+
+# connect re0 to our bridge and rename to indicate it should not be configured.
+# you'll see dhcpcd ignores all interfaces named `br*` later.
+name re0: br0re0
+msg br0re0: setpromisc 1
+connect br0re0: br0: lower link0
+
+# create lan0 on br0 for system to use for networking
+mkpeer br0: eiface link1 ether
+name br0:link1 lan0
+msg lan0: set 56:9C:FC:00:00:15
+
+# create jail0, this is local to machine and auto-generated MAC is fine
+mkpeer br1: eiface link1 ether
+name br1:link1 jail0
+```
+
+Normally that would leave you wondering how to find `lan0` and `jail0` since
+they started with [ifconfig(8)][50] names `ngeth0` and so on. But our
+[rc(8)][61] script has ensured [ifconfig(8)][50] sees the same names as
+[ngctl(8)][48]. That is now really valuable for [rc.conf(5)][63]. We need to
+put our renamed `br0re0` (see above that was `re0`) in the correct mode:
+
+```
+netgraph_enable="YES"
+netgraph_config="ngctl.conf"
+ifconfig_br0re0="-lro -tso4 -tso6 -rxcsum6 -txcsum6 -rxcsum -txcsum promisc up"
+
+# The private network needs to have rtadvd running on it. Sooo much nicer than
+# having workstation run a DHCP server.
+rtadvd_enable="YES"
+rtadvd_interfaces="jail0"
+```
+
+You are sharing the interface remember which is why you need some extra config
+for `br0re0` above. You can now manually assign config `lan0` and `jail0`:
+```
+ifconfig_lan0="inet ..." # however you would but s/re0/lan0/g
+ifconfig_lan0_ipv6="inet6 ..."
+ifconfig_jail0="inet ..." # this private jails comms
+ifconfig_jail0_ipv6="inet6 ..."
+```
+
+I don't do that, I think [net/dhcpcd][20] is the best way of doing this here,
+and I use a minimal config for that in `/usr/local/etc/dhcpcd.conf`:
+```
+controlgroup wheel
+clientid
+
+vendorclassid
+
+option domain_name_servers, domain_name, domain_search
+option classless_static_routes
+option interface_mtu
+option rapid_commit
+
+# By default we try to get v4 and v6, soon only v6...
+ipv4
+ipv6
+ipv6rs
+dhcp
+dhcp6
+
+# only handle these
+denyinterfaces lo* br*
+allowinterfaces lan0 jail0
+
+# there has been a fix and you should be able to set "temporary" now
+# before fix it would never delete any...
+interface lan0
+  slaac private
+
+# For the jails they are on a different ULA and EUI-64 is desirable because a
+# predictable MAC <-> IPv6 address is one less thing to sort out when putting
+# a jail into DNS.
+interface jail0
+  persistent
+  noipv4
+  noipv6rs
+  static ip6_address=fdc5:972:cd8c::1/64
+```
+
+I know that seems excessive. But this config will use either SLAAC or DHCPv6 for
+IPv6 and DHCP for IPv4. That covers all my bases as I use DHCP/DHCPv6 with
+[net/kea][23] for some networks and [rtadvd(8)][65] for others. It also shows
+how you might set a static address if you need that. I set the one static here
+so jails can find packages when I install them. Also notice how it ignores
+"br*" so `br0re0` will not get messed up by [net/dhcpcd][20].
+
+And we need to actually set up [rtadvd.conf(5)][66] in `/etc/rtadvd.conf`:
+```
+# A word of extreme caution, the backslash character continues a comment as well
+# as any configuration! That bit me for hours as I was trying different ways to
+# set pinfoflags by commenting out lines. Be very careful, the way this file is
+# written most configuration lines end with backslash.
+
+default:\
+        :maxinterval#120:mininterval#30:
+
+# The jail0 is the only interface we are advertising on. This is a closed loop
+# since my workstation does NOT route. Besides, it only has ULA addresses that
+# won't go anywhere anyway. The purpose is for intra-jail traffic.
+#
+# This needs to be advertised as lower priority. Basically you use it when the
+# route matches exactly. `jail0` has its address set statically in either the
+# system rc.conf or in dhcpcd.conf.
+
+jail0:\
+        :raflags="l":rltime#0:tc=default:
+```
+
+Make sure `lan0` is working and you can `ping` and `ping6` out. So far we
+haven't used the new utiilities or modules. That is going to change with a jail.
+
+For jails I like to have the following set up in the main [jail.conf(5)][60]
+file `/etc/jail.conf`:
+```
+# define interfaces for our jails. each jail can have the same interface names
+# but change `lan0` to `lan0name` if you don't like that.
+# Also don't forget that lan0 needs a MAC added.
+$lan0="jeiface $name lan0";
+$jail0="jeiface $name jail0";
+
+# create wormholes, assume there is a br[0|1] on the system and a lan0|jail0
+# interface in the jail. Using `link` instead of `linkX` is what stable/14 is
+# missing. That is vital so you don't have to track bridge links!
+$wh0="ngportal :br0$name:br0:link $name:lan0system:lan0:ether";
+$wh1="ngportal :br1$name:br1:link $name:jail0system:jail0:ether";
+
+# NOTE: by naming the wormholes there is a race when restarting the same jail
+#       after shutting it down. The jail vnet(9) is not guaranteed to be cleaned
+#       up immediately. It can take some time. So we need to try to destroy the
+#       wormhole manually. That way a restart won't have a name conflict.
+$wh0end="ngctl shutdown br0$name: 2>/dev/null || :";
+$wh1end="ngctl shutdown br1$name: 2>/dev/null || :";
+```
+
+That can be a bit clunky but the reason is in comments. When jails shutdown
+their [vnet(9)][41] lingers for a while (I believe to prevent a race). That can
+cause a problem if you start a jail, stop it, then restart it right away. Why?
+Because until the [vnet(9)][41] is gone you will collide on wormhole names!
+
+There is no real reason to have wormhole names though. I just point it out as if
+you give wormholes names you have to be aware that they don't instantly go away
+at jail shutdown. If left un-named and you don't shut them down the wormhole is
+automatically closed when the [vnet(9)][41] is cleaned up.
+
+Ok lets look at how that can be used in an individual jail conf:
+```
+dev15 {
+        vnet;
+        exec.created += "$lan0 56:9C:FC:10:02:15";
+        exec.created += "$jail0";
+        exec.created += "$wh0";
+        exec.created += "$wh1";
+        # ... whatever you usually do
+        exec.start = "/bin/sh /etc/rc";
+        exec.stop = "/bin/sh /etc/rc.shutdown jail";
+        exec.poststop += "$wh0end"; # not needed if you don't name wormholes
+        exec.poststop += "$wh1end";
+}
+```
+
+Remember you MUST give all your `$lan` a MAC address to avoid collisions.
+I know you didn't even get to use the portal gun directly its in a conf file,
+this is a bummer man!
