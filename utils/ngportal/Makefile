@@ -1,0 +1,28 @@
+#
+# Copyright (c) 2025 David Marker <dave@freedave.net>
+#
+# SPDX-License-Identifier: BSD-2-Clause
+#
+
+LOCALBASE?=/usr/local
+
+BINDIR=	${LOCALBASE}/bin
+SHAREDIR=${LOCALBASE}/share
+
+DIRS+=	MAN8
+MAN8=	${MANDIR}8
+
+PROG=	ngportal
+MAN=	ngportal.8
+SRCS=	kld.c ng.c wormhole.c main.c
+LIBADD=	jail netgraph
+CFLAGS+=-I${.CURDIR}/../../sys
+CFLAGS+=-I${.CURDIR}/../../bin/common
+MK_DEBUG_FILES= no
+
+WARNS?=1
+
+.PATH:  ${.CURDIR}/../../bin/ngportal
+.PATH:  ${.CURDIR}/../../bin/common
+
+.include <bsd.prog.mk>

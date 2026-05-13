@@ -1,0 +1,21 @@
+If:
+    PathMatch: "sys/.*.c"
+CompileFlags:
+    Add:
+        - "-D_KERNEL"
+        - "-D_SYS_KPILITE_H_"
+        - "-DVIMAGE"
+        - "-DINET"
+        - "-DINET6"
+        - "-DNOCLANGD"
+        - "-I."
+---
+If:
+    PathMatch: "bin/.*/.*.c"
+CompileFlags:
+    Add:
+        - "-I../../sys"
+        - "-I../common"
+        - "-DINET"
+        - "-DINET6"
+

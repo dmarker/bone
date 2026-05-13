@@ -1,0 +1,15 @@
+*.o
+*.ko
+*.gz
+export_syms
+i386
+machine
+opt_global.h
+opt_inet.h
+opt_inet6.h
+.depend
+*.pieo
+.depend.*.o
+x86
+utils/ngpcap/ngpcap
+utils/ngportal/ngportal

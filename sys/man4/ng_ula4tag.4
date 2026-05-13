@@ -1,0 +1,218 @@
+.\"
+.\" Copyright (c) 2024 David Marker <dave@freedave.net>
+.\"
+.\" SPDX-License-Identifier: BSD-2-Clause
+.\"
+.Dd October 15, 2024
+.Dt NG_ULA4TAG 4
+.Os
+.Sh NAME
+.Nm ng_ula4tag
+.Nd M_VLANTAG out of band tagging netgraph node type
+.Sh SYNOPSIS
+.In sys/types.h
+.In netgraph.h
+.In netgraph/ng_ula4tag.h
+.Sh DESCRIPTION
+The
+.Nm ula4tag
+node type can add M_VLANTAG tags to frames that are IPv6 ULA or IPv4
+.Pp
+Each node has two hooks,
+.Va tag
+and
+.Va untag .
+Traffic entering the
+.Va tag
+hook that is IPv4 will have the configured
+.Va ip4tag
+applied before sending out the
+.Va untag
+hook.
+Traffic entering the
+.Va tag
+hook that is IPv6 that is a GUA is left untagged.
+But if it is a ULA address will have the configured
+.Va ulatag
+applied before sending out the
+.Va untag
+hook.
+IPv6 that is a LL address will be sent out with and without the
+.Va ulatag .
+This allows you to get to all interfaces with link local.
+Likewise any IPv6 multicast traffic will be sent to both hooks, allowing for
+multiple
+.Va Router Advertisements
+to respond to
+.Va Router Solicitations .
+.Pp
+Traffic arriving on the
+.Va untag
+hook will have both
+.Va M_VLANTAG
+and
+.Va IEEE 802.1Q VLAN
+tags removed before sending out the
+.Va tag
+hook.
+.Sh HOOKS
+This node type supports the following hooks:
+.Bl -tag -width "untag"
+.It Va tag
+Typically this hook would be connected to a
+.Xr ng_ether 4
+node, using the
+.Va lower
+hook.
+.It Va untag
+Typically this hook would also be connected to an
+.Xr ng_bridge 4
+type node using the
+.Va upper
+hook or an
+.Xr ng_vlan 4
+type node using the
+.Va downstream
+hook.
+.El
+.Sh CONTROL MESSAGES
+This node type supports the generic control messages, plus the following:
+.Bl -tag -width foo
+.It Dv NGM_ULA4TAG_GET_CONFIG Pq Ic getconfig
+Returns the current configuration as a struct
+.Vt "struct ng_ula4tag_config" .
+.It Dv NGM_ULA4TAG_SET_CONFIG Pq Ic setconfig
+Set the node configuration.
+This command takes a
+.Vt "struct ng_ula4tag_config" .
+as an argument:
+.Bd -literal -offset 0n
+/* Node configuration structure */
+struct ng_ula4tag_config {
+  uint16_t    ulatag;  /* tag for ULA traffic */
+  uint16_t    ip4tag;  /* tag for IPv4 traffic */
+};
+.Ed
+.Pp
+Either
+.Va ulatag
+or
+.Va ip4tag
+may be 0 to indicate no tagging or 0xFFF to indicate it should be dropped.
+.Pp
+The values 1-4094 will result in an
+.Va M_VLANTAG
+being applied when traffic matches.
+.El
+.Sh SHUTDOWN
+This node shuts down upon receipt of a
+.Dv NGM_SHUTDOWN
+control message, or when both hooks have been disconnected.
+.Sh EXAMPLES
+This is an involved example showing how you could bridge two network interfaces,
+.Va em1
+and
+.Va em2
+with a
+.Nm
+to split a /64 IPv6 network.
+Instead of using
+.Va em1
+or
+.Va em2 ,
+you now have 3
+.Xr ng_eiface 4
+to configure:
+.Bl -tag -width XXXXX
+.It gw0
+This is where you configure your GUA that will be shared.
+.It lan0
+This is for your local area network to have a ULA and IPv4 address.
+.It wifi0
+This is for your wifi network to have a ULA and IPv4 address.
+.El
+.Pp
+It probably helps to see what is created:
+.Bd -literal -offset indent
+                        GUA
+                        +-----------+
+  ULA + IPv4            | ng_eiface |        ULA + IPv4
+ +--------------+       | gw0       |       +---------------+
+ | ng_eiface    |       +-----+-----+       | ng_eiface     |
+ | lan0         |       ether |             | wifi0         |
+ +-------+------+             |             +------+--------+
+   ether |                    |                    | ether
+         |                    | nomatch            |
+         |               +----+----+               |
+         |         vl10  | ng_vlan |  vl20         |
+         +---------------+         +---------------+
+                         | vlan0   |
+                         +----+----+
+                              | downstream
+                              |
+                         link |
+     +------------------------+------------------------+
+     | ng_bridge             br0                       |
+     +---+-----------------------------------------+---+
+         | link                               link |
+         |                                         |
+   untag |                                         | untag
+   +-----+------+                           +------+-----+
+   | ng_ula4tag |                           | ng_ula4tag |
+   | tag10      |                           | tag20      |
+   +-----+------+                           +------+-----+
+         | tag                                 tag |
+   lower |                                         | lower
+    +----+-----+                             +-----+----+
+    | ng_ether |                             | ng_ether |
+    | em1      |                             | em2      |
+    +----+-----+                             +-----+----+
+         |                                         |
+         V                                         V
+        LAN                                      WiFi
+.Ed
+.Pp
+And here is how to create this:
+.Bd -literal -offset 4n
+#!/bin/sh
+
+ngctl -f- << EOF
+mkpeer .: eiface e ether
+name .:e gw0
+disconnect .: e
+mkpeer gw0: vlan ether nomatch
+name gw0:ether vlan0
+msg vlan0: setencap 0
+mkpeer vlan0: bridge downstream link
+name vlan0:downstream br0
+mkpeer em1: ula4tag lower tag
+name em1:lower tag10
+msg tag10: setconfig { ulatag=10, ip4tag=10 }
+connect tag10: br0: untag link
+mkpeer vlan0:eiface vl10 ether
+name vlan0:vl10 lan0
+msg vlan0: addfilter { vlan=10 hook="vl10" pcp=0 cfi=0 }
+mkpeer em2: ula4tag lower tag
+name em2:lower tag20
+msg tag20: setconfig { ulatag=20, ip4tag=20 }
+connect tag20: br0: untag link
+mkpeer vlan0:eiface vl20 ether
+name vlan0:vl20 wifi0
+msg vlan0: addfilter { vlan=20 hook="vl20" pcp=0 cfi=0 }
+EOF
+.Ed
+.Sh SEE ALSO
+.Xr netgraph 4 ,
+.Xr ng_bridge 4 ,
+.Xr ng_eiface 4 ,
+.Xr ng_ether 4 ,
+.Xr ng_vlan 4 ,
+.Xr ngctl 8 ,
+.Xr nghook 8
+.Sh HISTORY
+The
+.Nm
+node type was first created for
+.Fx 15.0 .
+.Sh AUTHORS
+.An David Marker Aq Mt dave@freedave.net
