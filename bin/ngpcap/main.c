@@ -108,16 +108,18 @@ err_cleanup(int _)
 static __inline int
 checkcomponent(const char *name, const char *parsed, size_t max, const char **set)
 {
-	int rc = 0;
+	*set = NULL;
 
-	if (parsed != NULL) {
+	if (parsed != NULL && parsed[0] != '\0') {
 		if (strlen(parsed) > (max)) {
-			warnx("`%s': name too long: `%s'", name, parsed), rc++;
-		} else
-			*set = parsed[0] == '\0' ? NULL: parsed;
+			warnx("`%s': name too long: `%s'", name, parsed);
+			return (1);
+		}
+		*set = parsed;
+		return (0);
 	}
 
-	return (rc);
+	return (1); /* because everything must be set */
 }
 
 struct pcap_spec {

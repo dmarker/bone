@@ -1,6 +1,7 @@
 *.o
 *.ko
 *.gz
+*.core
 export_syms
 i386
 machine

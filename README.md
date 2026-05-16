@@ -189,7 +189,7 @@ this example is `re0`. So the bridge for your local area network will be `br0`
 and the private bridge for jails will be `br1` we will rename `re0` to `re0br0`:
 ```
 # you get to have comments in this file
-# Start with bridges (crete br0 and br1):
+# Start with bridges (create br0 and br1):
 mkpeer .: bridge b link0
 name .:b br0
 msg br0: setpersistent
