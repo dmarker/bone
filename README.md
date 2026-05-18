@@ -16,6 +16,7 @@
 [44]: https://man.freebsd.org/cgi/man.cgi?query=ng_tee&sektion=4
 [45]: https://man.freebsd.org/cgi/man.cgi?query=ng_ether&sektion=4
 [46]: https://man.freebsd.org/cgi/man.cgi?query=ng_iface&sektion=4
+[47]: https://man.freebsd.org/cgi/man.cgi?query=ng_vlan&sektion=4
 [48]: https://man.freebsd.org/cgi/man.cgi?query=ngctl&sektion=8
 [50]: https://man.freebsd.org/cgi/man.cgi?query=ifconfig&sektion=8
 [60]: https://man.freebsd.org/cgi/man.cgi?query=jail.conf&sektion=5
@@ -25,6 +26,7 @@
 [64]: https://man.freebsd.org/cgi/man.cgi?query=loader.conf&sektion=5
 [65]: https://man.freebsd.org/cgi/man.cgi?query=rtadvd&sektion=8
 [66]: https://man.freebsd.org/cgi/man.cgi?query=rtadvd.conf&sektion=5
+[67]: https://man.freebsd.org/cgi/man.cgi?query=tcpdump&sektion=1
 
 # bone
 The "[B]ag [O]f [N]etgraph [E]xtensions" is a set of evolving
@@ -84,7 +86,7 @@ This is how it might appear in [jail.conf(5)][60]:
 jeiface $name lan0
 ```
 ## wormhole
-`jeiface` made it a one-liner to crate the interface for your jail, but as it is
+`jeiface` made it a one-liner to create the interface for your jail, but as it is
 its not connected to anything.
 
 The ng_wormhole(4) node allows you to connect any two [netgraph(4)][40] nodes
@@ -99,7 +101,7 @@ connecting ng_wormholes(4).
 
 Connecting an [ng_bridge(4)][43] named `br0` on the system to an
 [ng_eiface(4)][42] in a jail named `lan0` and naming the two wormhole nodes
-`br0$name` ane `lan0system` after what they are connected with is now one line
+`br0$name` and `lan0system` after what they are connected with is now one line
 ([jail.conf(5)][60] format again):
 ```
 ngportal :br0$name:br0:link $name:lan0system:lan0:ether
@@ -114,7 +116,7 @@ trace both layers at the same time. I don't know of any use for this besides
 debugging [netgraph(4)][40] nodes.
 
 This node benefits from a standalone utility as well, ngpcap(8) to connect and
-pipe output to tcpcump(8):
+pipe output to [tcpdump(1)][67]:
 ```
 ngpcap inet6:tee0:right2left ether:tee1:left2right | tcpdump -r -
 ```
@@ -131,9 +133,9 @@ address space. And I want separate networks for my LAN and WiFi. That is where
 ng_ula4tag(4) comes in, it allows you to VLAN tag [ULA][20] and IPv4 traffic
 coming in while leaving GUA traffic untagged.
 
-The idea is you connect ng_ether(4) to this, configure tags, and connect the
-ng_ula4tag(4) to an ng_bridge(4). Additionally on the bridge you need an
-ng_vlan(4) to separate things out. The man page has a detailed description of
+The idea is you connect [ng_ether(4)][45] to this, configure tags, and connect the
+ng_ula4tag(4) to an [ng_bridge(4)][43]. Additionally on the bridge you need an
+[ng_vlan(4)][47] to separate things out. The man page has a detailed description of
 how to configure.
 
 This is not ephemeral like ng_wormhole(4) or ng_pcap(4) and doesn't require any
@@ -208,6 +210,7 @@ connect br0re0: br0: lower link0
 # create lan0 on br0 for system to use for networking
 mkpeer br0: eiface link1 ether
 name br0:link1 lan0
+# basically everything connected to br0 needs a unique MAC set
 msg lan0: set 56:9C:FC:00:00:15
 
 # create jail0, this is local to machine and auto-generated MAC is fine
@@ -316,7 +319,7 @@ For jails I like to have the following set up in the main [jail.conf(5)][60]
 file `/etc/jail.conf`:
 ```
 # define interfaces for our jails. each jail can have the same interface names
-# but change `lan0` to `lan0name` if you don't like that.
+# but change `lan0` to `lan0$name` if you don't like that.
 # Also don't forget that lan0 needs a MAC added.
 $lan0="jeiface $name lan0";
 $jail0="jeiface $name jail0";
