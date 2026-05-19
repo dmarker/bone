@@ -188,7 +188,7 @@ If `ngctl ls` does not show your network interfaces you have to reboot. Sorry.
 Now you need `/usr/loca/etc/ng/ngctl.conf`. I'm assuming you want a private
 network for your jails as well as the ability to share your main NIC, which in
 this example is `re0`. So the bridge for your local area network will be `br0`
-and the private bridge for jails will be `br1` we will rename `re0` to `re0br0`:
+and the private bridge for jails will be `br1` we will rename `re0` to `br0re0`:
 ```
 # you get to have comments in this file
 # Start with bridges (create br0 and br1):
