@@ -28,6 +28,9 @@
 [66]: https://man.freebsd.org/cgi/man.cgi?query=rtadvd.conf&sektion=5
 [67]: https://man.freebsd.org/cgi/man.cgi?query=tcpdump&sektion=1
 
+[70]: https://reviews.freebsd.org/D56743
+[71]: https://reviews.freebsd.org/D56744
+
 # bone
 The "[B]ag [O]f [N]etgraph [E]xtensions" is a set of evolving
 [netgraph(4)][40] kernel modules and their utilities.
@@ -43,6 +46,10 @@ These require patches merged into FreeBSD15. While kernel patches are available
 for FreeBSD14, there is no plan to merge them (although some were like the `-j`
 option for [ngctl(8)][48] others have not). A table of required patches to `src`
 and their status in the process is still [here][04].
+
+The reviews to add to ports:
+- [kmods][70]
+- [utils][71]
 
 ## rough edges.
 But you are going to run into some rough edges here. First you must add this to
@@ -214,8 +221,8 @@ name br0:link1 lan0
 msg lan0: set 56:9C:FC:00:00:15
 
 # create jail0, this is local to machine and auto-generated MAC is fine
-mkpeer br1: eiface link1 ether
-name br1:link1 jail0
+mkpeer br1: eiface link0 ether
+name br1:link0 jail0
 ```
 
 Normally that would leave you wondering how to find `lan0` and `jail0` since
@@ -244,8 +251,13 @@ ifconfig_jail0="inet ..." # this private jails comms
 ifconfig_jail0_ipv6="inet6 ..."
 ```
 
-I don't do that, I think [net/dhcpcd][20] is the best way of doing this here,
-and I use a minimal config for that in `/usr/local/etc/dhcpcd.conf`:
+I don't do that, I think [net/dhcpcd][20] is the best way of configuring network
+so I have this instead:
+```
+dhcpcd_enable="YES"
+```
+
+I then use a minimal config for [net/dhcpcd][20] in `/usr/local/etc/dhcpcd.conf`:
 ```
 controlgroup wheel
 clientid
@@ -324,18 +336,20 @@ file `/etc/jail.conf`:
 $lan0="jeiface $name lan0";
 $jail0="jeiface $name jail0";
 
-# create wormholes, assume there is a br[0|1] on the system and a lan0|jail0
+# open wormholes, assume there is a br[0|1] on the system and a lan0|jail0
 # interface in the jail. Using `link` instead of `linkX` is what stable/14 is
 # missing. That is vital so you don't have to track bridge links!
-$wh0="ngportal :br0$name:br0:link $name:lan0system:lan0:ether";
-$wh1="ngportal :br1$name:br1:link $name:jail0system:jail0:ether";
+# Naming the wormholes connected to br0 (LAN) and leaving those connected to
+# JAIL (br1) network un-named. This matters for jail shutdown.
+$wh0open="ngportal :br0$name:br0:link $name:lan0system:lan0:ether";
+$wh1open="ngportal ::br1:link $name::jail0:ether";
 
 # NOTE: by naming the wormholes there is a race when restarting the same jail
 #       after shutting it down. The jail vnet(9) is not guaranteed to be cleaned
 #       up immediately. It can take some time. So we need to try to destroy the
 #       wormhole manually. That way a restart won't have a name conflict.
-$wh0end="ngctl shutdown br0$name: 2>/dev/null || :";
-$wh1end="ngctl shutdown br1$name: 2>/dev/null || :";
+$wh0close="ngctl shutdown br0$name: 2>/dev/null || :";
+$wh1close=":";
 ```
 
 That can be a bit clunky but the reason is in comments. When jails shutdown
@@ -346,7 +360,10 @@ Because until the [vnet(9)][41] is gone you will collide on wormhole names!
 There is no real reason to have wormhole names though. I just point it out as if
 you give wormholes names you have to be aware that they don't instantly go away
 at jail shutdown. If left un-named and you don't shut them down the wormhole is
-automatically closed when the [vnet(9)][41] is cleaned up.
+automatically closed when the [vnet(9)][41] is cleaned up. The example has one
+of each. In either case, because you created interfaces in the jail and didn't
+move them (`jeiface`) they can and will be left to [vnet(9)][41] cleanup to
+handle.
 
 Ok lets look at how that can be used in an individual jail conf:
 ```
@@ -354,13 +371,13 @@ dev15 {
         vnet;
         exec.created += "$lan0 56:9C:FC:10:02:15";
         exec.created += "$jail0";
-        exec.created += "$wh0";
-        exec.created += "$wh1";
+        exec.created += "$wh0open";
+        exec.created += "$wh1open";
         # ... whatever you usually do
         exec.start = "/bin/sh /etc/rc";
         exec.stop = "/bin/sh /etc/rc.shutdown jail";
-        exec.poststop += "$wh0end"; # not needed if you don't name wormholes
-        exec.poststop += "$wh1end";
+        exec.poststop += "$wh0close"; # only have to do for named wormhole
+        exec.poststop += "$wh1close"; # but I take comfort in symmetry
 }
 ```
 
