@@ -157,7 +157,7 @@ insists on a worse idea: giving out only /64 prefix.
 
 Additional kernel modules are planned but not yet ready.
 
-## netgraph(4) rc(8) script
+## netgraph(4) rc(8) script (bone_netgraph)
 Don't get excited, this isn't the perfect [netgraph(4)][40] [rc(8)][61] script
 you are hoping for. In fact its a cop-out.
 
@@ -232,8 +232,8 @@ they started with [ifconfig(8)][50] names `ngeth0` and so on. But our
 put our renamed `br0re0` (see above that was `re0`) in the correct mode:
 
 ```
-netgraph_enable="YES"
-netgraph_config="ngctl.conf"
+bone_netgraph_enable="YES"
+bone_netgraph_config="ngctl.conf"
 ifconfig_br0re0="-lro -tso4 -tso6 -rxcsum6 -txcsum6 -rxcsum -txcsum promisc up"
 
 # The private network needs to have rtadvd running on it. Sooo much nicer than

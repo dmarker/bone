@@ -18,12 +18,12 @@ rcvar="${name}_enable"
 start_cmd="netgraph_start"
 stop_cmd="netgraph_stop"
 
-: ${netgraph_confdir:=/usr/local/etc/ng}
-: ${netgraph_config:=ngctl.conf}
+: ${bone_netgraph_confdir:=/usr/local/etc/ng}
+: ${bone_netgraph_config:=ngctl.conf}
 
 #
 # This is the most minimal netgraph(4) configuration we can create. That is it
-# puts the effort on you to create the netgraph_config file acceptable to
+# puts the effort on you to create the bone_netgraph_config file acceptable to
 # ngctl(8).
 #
 # I have created many scripts that attempt to configure netgraph(4) from
@@ -32,9 +32,9 @@ stop_cmd="netgraph_stop"
 # to figure out a scheme for vlan tags for the user. Just let them do whatever
 # they want, however they want.
 #
-# The one extra thing it does after `ngctl -f ${netgraph_config}` is rename any
-# network interfaces, so ifconfig(8) and ngctl(8) use the same name. This only
-# effects the following netgraph node types:
+# The one extra thing it does after `ngctl -f ${bone_netgraph_config}` is rename
+# any network interfaces, so ifconfig(8) and ngctl(8) use the same name. This
+# only effects the following netgraph node types:
 #	* ng_ether(4)
 #	* ng_eiface(4)
 #	* ng_iface(4)
@@ -141,17 +141,17 @@ restore_ether_name()
 	${IFCONFIG} ${ifname} name ${orig}
 }
 
-netgraph_start()
+bone_netgraph_start()
 {
 	# blindly run ngctl(8) with the file provided.
 	# If this fails we want to see the errors.
-	${NGCTL} -f ${netgraph_confdir}/${netgraph_config}
+	${NGCTL} -f ${bone_netgraph_confdir}/${bone_netgraph_config}
 
 	# ran before network brought up so lets just reset and inform user so
 	# they can fix config and try again.
 	if [ $? -ne 0 ]; then
-		echo "error with \"${netgraph_confdir}/${netgraph_config}\": restoring network" >&2
-		netgraph_stop
+		echo "error with \"${bone_netgraph_confdir}/${bone_netgraph_config}\": restoring network" >&2
+		bone_netgraph_stop
 		return  # don't bother with next part.
 	fi
 
@@ -173,7 +173,7 @@ netgraph_start()
 	done
 }
 
-netgraph_stop()
+bone_netgraph_stop()
 {
 	# We just ruthelessly give everything a shutdown
 	for nd in $(list_typed_ids); do

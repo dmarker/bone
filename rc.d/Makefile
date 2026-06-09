@@ -7,7 +7,7 @@
 LOCALBASE?=/usr/local
 SCRIPTSDIR=${LOCALBASE}/etc/rc.d
 DIRS+=  SCRIPTSDIR
-SCRIPTS=	netgraph
+SCRIPTS=	bone_netgraph
 
 beforeinstall : installdirs
 
