@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 
-# PROVIDE: netgraph
+# PROVIDE: bone_netgraph
 # REQUIRE: FILESYSTEMS iovctl serial sppp sysctl
 # REQUIRE: hostid
 # BEFORE:  netif
@@ -12,11 +12,11 @@
 
 . /etc/rc.subr
 
-name="netgraph"
+name="bone_netgraph"
 desc="configure netgraph nodes via file"
 rcvar="${name}_enable"
-start_cmd="netgraph_start"
-stop_cmd="netgraph_stop"
+start_cmd="bone_netgraph_start"
+stop_cmd="bone_netgraph_stop"
 
 : ${bone_netgraph_confdir:=/usr/local/etc/ng}
 : ${bone_netgraph_config:=ngctl.conf}
