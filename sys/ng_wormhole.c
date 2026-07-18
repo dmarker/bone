@@ -110,7 +110,7 @@ ng_wormhole_constructor(node_p node)
  * than NG_HOOKSIZ.
  *
  * Obviously that mismatch means we can't just name the hook after the jail.
- * But even a 64-bit int only needs 19 characters (no commas). 
+ * But even a 64-bit int only needs 19 characters (no commas).
  *
  * That even leaves space to store some intent like a prefix of "jid=". That
  * ought to give users a clue where the other side of the wormhole lives.
@@ -411,7 +411,7 @@ ng_wormhole_rcvmsg(node_p node, item_p item, hook_p lasthook)
 				error = EINVAL;
 				break;
 			}
-			/* only one move is allowed */
+			/* only one open is allowed */
 			if (priv->warp != NULL)
 				return (EISCONN);
 
@@ -460,7 +460,7 @@ ng_wormhole_rcvdata(hook_p hook, item_p item )
 /*
  * shutdown of one side should just shutdown both. This automatically happens
  * because prior to this being called, ng_base called ng_rmnode which killed
- * all our hooks. In particular removing `warp` from both sides collapses the
+ * all our hooks. In particular removing `warp` from either side collapses the
  * wormhole.
  *
  * When this gets called your hooks are removed already.

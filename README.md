@@ -1,16 +1,14 @@
 [01]: https://www.freebsd.org
-[02]: https://github.com/dmarker/bong-kmods
-[03]: https://github.com/dmarker/bong-utils
-[04]: https://github.com/dmarker/bong-patches
+[04]: https://github.com/dmarker/bone-patches
 [10]: https://en.wikipedia.org/wiki/Unique_local_address
 [20]: https://www.freshports.org/net/dhcpcd
-[21]: https://github.com/dmarker/bong-kmods
-[22]: https://github.com/dmarker/bong-utils
 [23]: https://www.freshports.org/net/kea
+[24]: https://www.freshports.org/net/bone-kmods
+[25]: https://www.freshports.org/net/bone-utils
 [30]: https://bugs.freebsd.org/bugzilla/show_bug.cgi?id=286717
 
 [40]: https://man.freebsd.org/cgi/man.cgi?query=netgraph&sektion=4
-[41]: https://man.freebsd.org/cgi/man.cgi?query=vnet&sektion=9&manpath=FreeBSD+14.0-RELEASE
+[41]: https://man.freebsd.org/cgi/man.cgi?query=VNET&sektion=9
 [42]: https://man.freebsd.org/cgi/man.cgi?query=ng_eiface&sektion=4
 [43]: https://man.freebsd.org/cgi/man.cgi?query=ng_bridge&sektion=4
 [44]: https://man.freebsd.org/cgi/man.cgi?query=ng_tee&sektion=4
@@ -27,29 +25,45 @@
 [65]: https://man.freebsd.org/cgi/man.cgi?query=rtadvd&sektion=8
 [66]: https://man.freebsd.org/cgi/man.cgi?query=rtadvd.conf&sektion=5
 [67]: https://man.freebsd.org/cgi/man.cgi?query=tcpdump&sektion=1
+[68]: https://man.freebsd.org/cgi/man.cgi?query=sysctl&sektion=8
 
 [70]: https://reviews.freebsd.org/D56743
 [71]: https://reviews.freebsd.org/D56744
+
+[72]: https://man.freebsd.org/cgi/man.cgi?query=ng_pcap&sektion=4&manpath=freebsd-ports
+[73]: https://man.freebsd.org/cgi/man.cgi?query=ng_ula4tag&sektion=4&manpath=freebsd-ports
+[74]: https://man.freebsd.org/cgi/man.cgi?query=ng_wormhole&sektion=4&manpath=freebsd-ports
+[80]: https://man.freebsd.org/cgi/man.cgi?query=ngportal&sektion=8&manpath=freebsd-ports
+[81]: https://man.freebsd.org/cgi/man.cgi?query=ngpcap&sektion=8&manpath=freebsd-ports
 
 # bone
 The "[B]ag [O]f [N]etgraph [E]xtensions" is a set of evolving
 [netgraph(4)][40] kernel modules and their utilities.
 
-Due to how ports are built on [FreeBSD][01], it makes more sense to combine what
-were two separate repos into one. I'll leave archives behind of the separate
-[kmods][02] and [utilities][03] repos. That allows making a default and
-"invariants" version for the kmods (for when your kernel is built with
-invariants, as is the default for CURRENT). And it means we have just one
-package for the utilities.
+This was two separate repositories, but due to how ports are built on
+[FreeBSD][01], it makes more sense to combine them. That allows making a default
+and "invariants" version for the kmods (for when your kernel is built with
+invariants, as is the default for CURRENT) while just building one package for
+the utilities.
+
+The freshports links:
+- [net/bone-kmods][24]
+- [net/bone-utils][25]
 
 These require patches merged into FreeBSD15. While kernel patches are available
 for FreeBSD14, there is no plan to merge them (although some were like the `-j`
 option for [ngctl(8)][48] others have not). A table of required patches to `src`
 and their status in the process is still [here][04].
 
-The reviews to add to ports:
-- [kmods][70]
-- [utils][71]
+[net/bone-kmods][24] has an `invariants` flavor because `FreeBSD-CURRENT` builds
+with invariants by default. But you can build any [FreeBSD][01] kernel with
+invariants. The issue is that [net/bone-kmods][24] must match the kernel build.
+If you aren't sure you can determine this using [sysctl(8)][68] or just install
+with:
+```
+# flavor=$(sysctl kern.features.invariants > /dev/null 2>&1 && echo "-invariants")
+# pkg install bone-kmods${flavor} bone-utils
+```
 
 ## rough edges.
 But you are going to run into some rough edges here. First you must add this to
@@ -78,11 +92,11 @@ connecting the `lower` hook, and to `setpromisc` on the [ng_ether(4)][45] but do
 not configure it for networking. Instead attach an [ng_eiface(4)][42] to the
 same [ng_bridge(4)][43] and configure that for networking instead. This is rock
 solid and lets you configure both IPv4 and IPv6 for any [ng_eiface(4)][42] in a
-jail (see `jeiface` below) connected to that same bridge via ng_wormhole(4)
-(also below).
+jail (see `jeiface` below) connected to that same bridge via
+[ng_wormhole(4)][74] (also below).
 
 ## jeiface
-Using [vnet(9)][41] with jails with [netgraph(4)][40] prior to these modules
+Using [VNET(9)][41] with jails with [netgraph(4)][40] prior to these modules
 required using [ifconfig(8)][50] with `vnet` to "move" an interfact into the
 jail. This utility takes a different route and is just a shell script to
 create an [ng_eiface(4)][42] in a jail, name it, and optionally assign a MAC
@@ -93,18 +107,18 @@ This is how it might appear in [jail.conf(5)][60]:
 jeiface $name lan0
 ```
 ## wormhole
-`jeiface` made it a one-liner to create the interface for your jail, but as it is
-its not connected to anything.
+`jeiface` made it a one-liner to create the interface for your jail, but as it
+is, its not connected to anything.
 
-The ng_wormhole(4) node allows you to connect any two [netgraph(4)][40] nodes
-that each reside in separate [vnet(9)][41] from each other (so jails). While you
-can (and I do) use this to simply attach an [ng_eiface(4)][42] created in a jail
-to an [ng_bridge(4)][43] on the system, it does not care what data it shovels
-back and forth.
+The [ng_wormhole(4)][74] node allows you to connect any two [netgraph(4)][40]
+nodes that each reside in separate [VNET(9)][41] from each other (so jails).
+While you can (and I do) use this to simply attach an [ng_eiface(4)][42] created
+in a jail to an [ng_bridge(4)][43] on the system, it does not care what data it
+shovels back and forth.
 
 But creation of wormholes and attaching both ends is problematic for scripting,
-so there is a utility, ngportal(8), to simplifying creation, naming, and
-connecting ng_wormholes(4).
+so there is a utility, [ngportal(8)][80], to simplifying creation, naming, and
+connecting both ends of the [ng_wormhole(4)][74].
 
 Connecting an [ng_bridge(4)][43] named `br0` on the system to an
 [ng_eiface(4)][42] in a jail named `lan0` and naming the two wormhole nodes
@@ -115,21 +129,21 @@ ngportal :br0$name:br0:link $name:lan0system:lan0:ether
 ```
 
 ## pcap
-The ng_pcap(4) node is mostly for debugging. It expects either layer 2 or layer
-3 nodes which you must configure after connecting to `source<N>` nodes. You
-inform ng_pcap(4) what the hook provides: ethernet frames, IPv4, or IPv6. In the
-case of IPv4 and IPv6, fake ethernet frames will be added. This allows you to
-trace both layers at the same time. I don't know of any use for this besides
-debugging [netgraph(4)][40] nodes.
+The [ng_pcap(4)][72] node is mostly for debugging. It expects either layer 2 or
+layer 3 nodes which you must configure after connecting to `source<N>` nodes.
+You inform [ng_pcap(4)][72] what the hook provides: ethernet frames, IPv4, or
+IPv6. In the case of IPv4 and IPv6, fake ethernet frames will be added. This
+allows you to trace both layers at the same time. I don't know of any use for
+this besides debugging [netgraph(4)][40] nodes.
 
-This node benefits from a standalone utility as well, ngpcap(8) to connect and
-pipe output to [tcpdump(1)][67]:
+This node benefits from a standalone utility as well, [ngpcap(8)][81] to connect
+and pipe output to [tcpdump(1)][67]:
 ```
 ngpcap inet6:tee0:right2left ether:tee1:left2right | tcpdump -r -
 ```
 
 To be of any use at all you have to plan out and insert some [ng_tee(4)][44] for
-the ng_pcap(4) to connect to. But its helped me while developing other
+the [ng_pcap(4)][72] to connect to. But its helped me while developing other
 [netgraph(4)][40] nodes. The man page has a detailed example.
 
 ## ula4tag
@@ -137,17 +151,17 @@ This is an oddball for sure but I have to use it because my ISP only gives me
 a /64 prefix for IPv6. That is a massive range, but Android will not do DHCPv6
 (probably a good thing IMO) and only does SLAAC. That takes up my whole GUA
 address space. And I want separate networks for my LAN and WiFi. That is where
-ng_ula4tag(4) comes in, it allows you to VLAN tag [ULA][20] and IPv4 traffic
-coming in while leaving GUA traffic untagged.
+[ng_ula4tag(4)][73] comes in, it allows you to VLAN tag [ULA][20] and IPv4
+traffic coming in while leaving GUA traffic untagged.
 
-The idea is you connect [ng_ether(4)][45] to this, configure tags, and connect the
-ng_ula4tag(4) to an [ng_bridge(4)][43]. Additionally on the bridge you need an
-[ng_vlan(4)][47] to separate things out. The man page has a detailed description of
-how to configure.
+The idea is you connect [ng_ether(4)][45] to this, configure tags, and connect
+the [ng_ula4tag(4)][73] to an [ng_bridge(4)][43]. Additionally on the bridge you
+need an [ng_vlan(4)][47] to separate things out. The man page has a detailed
+description of how to configure.
 
-This is not ephemeral like ng_wormhole(4) or ng_pcap(4) and doesn't require any
-additional utility. But it is well suited for using the [rc(8)][61] command
-provided.
+This is not ephemeral like [ng_wormhole(4)][74] or [ng_pcap(4)][72] and doesn't
+require any additional utility. But it is well suited for using the [rc(8)][61]
+command provided.
 
 This is functionality I'm not aware of existing elsewhere, so there is a good
 chance its a bad idea (but hey its working for me). I use it because my ISP
@@ -167,8 +181,8 @@ who knows, I am not the worlds best [sh(1)][62] practitioner.
 This is just going to pass a file to [ngctl(8)][48] and after that make sure
 netif interfaces (so [ng_ether(4)][45], [ng_eiface(4)][42], [ng_iface(4)][46]
 for example), get renamed to match the [netgraph(4)][40] node name (which you
-should have set in your config file with `name` command). So not much taken care
-of for you.
+should have set in your config file with a `name` command). So not much taken
+care of for you.
 
 But by renaming netif interfaces to something you expect you can now finish all
 config using the usual `ifconfig_<ifname>=...` stanzas of [rc.conf(5)][63] or
@@ -179,7 +193,7 @@ can dream up to put in an [ngctl(8)][48] command file.
 
 ## Example setup for using wormholes with jails
 
-After installing both `bone-kmods` (or `bone-kmods@invariants`) and `bone-utils`
+After installing both `bone-kmods` (or `bone-kmods-invariants`) and `bone-utils`
 here is some sample config ideas. You will have to change interface names and
 ULA addresses to meet your needs, these are the values I use.
 
@@ -229,7 +243,7 @@ Normally that would leave you wondering how to find `lan0` and `jail0` since
 they started with [ifconfig(8)][50] names `ngeth0` and so on. But our
 [rc(8)][61] script has ensured [ifconfig(8)][50] sees the same names as
 [ngctl(8)][48]. That is now really valuable for [rc.conf(5)][63]. We need to
-put our renamed `br0re0` (see above that was `re0`) in the correct mode:
+put our renamed `br0re0` (see above, that was `re0`) in the correct mode:
 
 ```
 bone_netgraph_enable="YES"
@@ -245,14 +259,14 @@ rtadvd_interfaces="jail0"
 You are sharing the interface remember which is why you need some extra config
 for `br0re0` above. You can now manually assign config `lan0` and `jail0`:
 ```
-ifconfig_lan0="inet ..." # however you would but s/re0/lan0/g
+ifconfig_lan0="inet ..." # however you normally would, but s/re0/lan0/g
 ifconfig_lan0_ipv6="inet6 ..."
-ifconfig_jail0="inet ..." # this private jails comms
+ifconfig_jail0="inet ..." # this is private jails comms
 ifconfig_jail0_ipv6="inet6 ..."
 ```
 
-I don't do that, I think [net/dhcpcd][20] is the best way of configuring network
-so I have this instead:
+I don't do that, I think [net/dhcpcd][20] is the best way of configuring the
+network so I have this instead:
 ```
 dhcpcd_enable="YES"
 ```
@@ -332,7 +346,7 @@ file `/etc/jail.conf`:
 ```
 # define interfaces for our jails. each jail can have the same interface names
 # but change `lan0` to `lan0$name` if you don't like that.
-# Also don't forget that lan0 needs a MAC added.
+# Also don't forget that $lan0 needs a MAC added.
 $lan0="jeiface $name lan0";
 $jail0="jeiface $name jail0";
 
@@ -345,7 +359,7 @@ $wh0open="ngportal :br0$name:br0:link $name:lan0system:lan0:ether";
 $wh1open="ngportal ::br1:link $name::jail0:ether";
 
 # NOTE: by naming the wormholes there is a race when restarting the same jail
-#       after shutting it down. The jail vnet(9) is not guaranteed to be cleaned
+#       after shutting it down. The jail VNET(9) is not guaranteed to be cleaned
 #       up immediately. It can take some time. So we need to try to destroy the
 #       wormhole manually. That way a restart won't have a name conflict.
 $wh0close="ngctl shutdown br0$name: 2>/dev/null || :";
@@ -353,16 +367,16 @@ $wh1close=":";
 ```
 
 That can be a bit clunky but the reason is in comments. When jails shutdown
-their [vnet(9)][41] lingers for a while (I believe to prevent a race). That can
+their [VNET(9)][41] lingers for a while (I believe to prevent a race). That can
 cause a problem if you start a jail, stop it, then restart it right away. Why?
-Because until the [vnet(9)][41] is gone you will collide on wormhole names!
+Because until the [VNET(9)][41] is gone you will collide on wormhole names!
 
 There is no real reason to have wormhole names though. I just point it out as if
 you give wormholes names you have to be aware that they don't instantly go away
 at jail shutdown. If left un-named and you don't shut them down the wormhole is
-automatically closed when the [vnet(9)][41] is cleaned up. The example has one
+automatically closed when the [VNET(9)][41] is cleaned up. The example has one
 of each. In either case, because you created interfaces in the jail and didn't
-move them (`jeiface`) they can and will be left to [vnet(9)][41] cleanup to
+move them (`jeiface`) they can and will be left to [VNET(9)][41] cleanup to
 handle.
 
 Ok lets look at how that can be used in an individual jail conf:
